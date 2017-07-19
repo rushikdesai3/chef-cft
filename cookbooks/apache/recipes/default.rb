@@ -32,7 +32,7 @@ rpm_package 'mysql-community-release' do
         action :install
 end
 
-service "mariadb" do
-	action [:enable, :start]
+package "mariadb" do
+	action :install
 end
 
