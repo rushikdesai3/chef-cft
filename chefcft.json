@@ -1,0 +1,414 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+
+    "Description": "CloudFormation Template to create architecture in AWS with LAMP and Bitnami Wordpress instances, diagram in Git repo Architecture.png file",
+
+    "Resources": {
+        "RushikChefVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+		"EnableDnsSupport": "true",
+               "EnableDnsHostnames": "true",
+                "InstanceTenancy": "default"
+            }
+        },
+        "PubSubChef1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "RushikChefVPC"
+                },
+                "AvailabilityZone": "us-east-1a",
+                "CidrBlock": "10.0.0.0/24",
+                "MapPublicIpOnLaunch": "true"
+            }
+        },
+        "PubSubChef2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "RushikChefVPC"
+                },
+                "AvailabilityZone": "us-east-1b",
+                "CidrBlock": "10.0.1.0/24",
+                "MapPublicIpOnLaunch": "true"
+            }
+        },
+        "PriSubChef1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "RushikChefVPC"
+                },
+                "AvailabilityZone": "us-east-1a",
+                "CidrBlock": "10.0.2.0/24",
+                "MapPublicIpOnLaunch": "true"
+            }
+        },
+        "PriSubChef2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "RushikChefVPC"
+                },
+                "AvailabilityZone": "us-east-1b",
+                "CidrBlock": "10.0.3.0/24",
+                "MapPublicIpOnLaunch": "true"
+            }
+        },
+	"ChefTaskIG": {
+            "Type": "AWS::EC2::InternetGateway"
+        },
+        "ChefGatewayAttach": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "ChefTaskIG"
+                },
+                "VpcId": {
+                    "Ref": "RushikChefVPC"
+                }
+            }
+        },
+        "PubRouteTabChef": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "RushikChefVPC"
+                }
+            }
+        },
+	"PubRouteChef": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "ChefTaskIG"
+                },
+                "RouteTableId": {
+                    "Ref": "PubRouteTabChef"
+                }
+            }
+        },
+        "PubSubRouteTabAss1": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PubRouteTabChef"
+                },
+                "SubnetId": {
+                    "Ref": "PubSubChef1"
+                }
+            }
+        },
+        "PubSubRouteTabAss2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PubRouteTabChef"
+                },
+                "SubnetId": {
+                    "Ref": "PubSubChef2"
+                }
+            }
+        },
+	"ChefNATIp": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+	"ChefNATGateway": {
+            "DependsOn": "ChefGatewayAttach",
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "ChefNATIp",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PubSubChef1"
+                }
+            }
+        },
+        "PriRouteTabChef": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "RushikChefVPC"
+                }
+            }
+        },
+	"PriRouteChef": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "ChefNATGateway"
+                },
+                "RouteTableId": {
+                    "Ref": "PriRouteTabChef"
+                }
+            }
+        },
+        "PriSubRouteTabAss1": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PriRouteTabChef"
+                },
+                "SubnetId": {
+                    "Ref": "PriSubChef1"
+                }
+            }
+        },
+        "PriSubRouteTabAss2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PriRouteTabChef"
+                },
+                "SubnetId": {
+                    "Ref": "PriSubChef2"
+                }
+            }
+        },
+        "PubSecurityGrp": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow Http, Https, SSH to client host",
+                "VpcId": {
+                    "Ref": "RushikChefVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "22",
+                        "ToPort": "22",
+                        "CidrIp": "72.196.48.126/32"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "80",
+                        "ToPort": "80",
+                        "CidrIp": "72.196.48.126/32"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "443",
+                        "ToPort": "443",
+                        "CidrIp": "72.196.48.126/32"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "-1",
+                        "FromPort": "-1",
+                        "ToPort": "-1",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ]
+            }
+        },
+        "PriSecurityGrp": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow Http, Https, SSH to client host",
+                "VpcId": {
+                    "Ref": "RushikChefVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "22",
+                        "ToPort": "22",
+                        "CidrIp": "10.0.0.0/16"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "80",
+                        "ToPort": "80",
+                        "CidrIp": "10.0.0.0/16"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "443",
+                        "ToPort": "443",
+                        "CidrIp": "10.0.0.0/16"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "-1",
+                        "FromPort": "-1",
+                        "ToPort": "-1",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ]
+            }
+        },
+        "BitnamiInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "AvailabilityZone": "us-east-1a",
+                "InstanceType": "t2.micro",
+                "ImageId": "ami-89f68a9f",
+                "KeyName": "rushik-keypair",
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "false",
+			"DeviceIndex": "0",
+                        "SubnetId": {
+                            "Ref": "PriSubChef1"
+                        },
+                        "GroupSet": [
+                            {
+                                "Ref": "PriSecurityGrp"
+                            }
+                        ]
+                    }
+                ],
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": {
+                            "VolumeType": "io1",
+                            "Iops": "100",
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": "10"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Owner",
+                        "Value": "rushik.desai"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Development"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Task"
+                    },
+                    {
+                        "Key": "Name",
+                        "Value": "Rushik-Bitnami-Chef"
+                    },
+                    {
+                        "Key": "NoShutdown",
+                        "Value": "YES"
+                    }
+                ]
+            }
+        },
+        "LAMPInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": "t2.micro",
+                "ImageId": "ami-9e2f0988",
+                "KeyName": "rushik-keypair",
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "true",
+			"DeviceIndex": "0",
+                        "SubnetId": {
+                             "Ref": "PubSubChef1"
+                        },
+                        "GroupSet": [
+                            {
+                                "Ref": "PubSecurityGrp"
+                            }
+                        ]
+                    }
+                ],
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/sdm",
+                        "Ebs": {
+                            "VolumeType": "io1",
+                            "Iops": "100",
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": "10"
+                        }
+                    }
+                ],
+		"UserData": { "Fn::Base64": { "Fn::Join": ["", [
+			"#!/bin/bash\n",
+			"sudo yum -y update\n",
+			"cd /home/ec2-user\n",
+			"curl -L https://www.opscode.com/chef/install.sh | sudo bash\n",
+			"sudo yum -y install git\n",
+			"sudo git clone https://github.com/rushikdesaik/chef-cft.git\n",
+			"cd chef-cft\n",
+			"sudo chef-solo -c solo.rb -j lamp.json\n",
+			"sudo echo '<?php phpinfo(); ?>' > /var/www/html/phpinfo.php\n"
+		]] }},
+		"Tags": [
+                    {
+                        "Key": "Owner",
+                        "Value": "rushik.desai"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Development"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Task"
+                    },
+                    {
+                        "Key": "Name",
+                        "Value": "Rushik-LAMP-Chef"
+                    },
+                    {
+                        "Key": "NoShutdown",
+                        "Value": "YES"
+                    }
+                ]
+            }
+        },
+        "RushikChefELB": {
+            "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+            "Properties": {
+                "Instances": [
+                    {
+                        "Ref": "BitnamiInstance"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "PubSubChef1"
+                    },
+                    {
+                        "Ref": "PubSubChef2"
+                    }
+                ],
+                "Listeners": [
+                    {
+                        "LoadBalancerPort": "80",
+                        "InstancePort": "80",
+                        "Protocol": "HTTP"
+                    }
+                ],
+                "HealthCheck": {
+                    "Target": "TCP:80",
+                    "HealthyThreshold": "3",
+                    "UnhealthyThreshold": "2",
+                    "Interval": "10",
+                    "Timeout": "5"
+                },
+                "SecurityGroups": [
+                    {
+                        "Ref": "PubSecurityGrp"
+                    }
+                ],
+                "CrossZone": "True"
+            }
+         }
+    }
+}
